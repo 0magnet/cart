@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<title>{{.Page.Title}}</title>
+<style>
+* { box-sizing: border-box; }
+.cancel-button {position: absolute;top: 16px;left: 16px;background-color: red;color: white;font-size: 24px;font-weight: bold;border: none;border-radius: 50%;width: 40px;height: 40px;display: flex;align-items: center;justify-content: center;cursor: pointer;}
+.checkout-container { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; justify-content: center; align-content: center; height: 100vh; width: 100vw; background-color: black; color: white; }
+.checkout-container form { width: 30vw; min-width: 500px; align-self: center; box-shadow: 0px 0px 0px 0.5px rgba(50, 50, 93, 0.1), 0px 2px 5px 0px rgba(50, 50, 93, 0.1), 0px 1px 1.5px 0px rgba(0, 0, 0, 0.07); border-radius: 7px; padding: 40px; margin-top: auto; margin-bottom: auto; background-color: white; color: black; }
+.hidden { display: none; }
+#payment-message { color: rgb(105, 115, 134); font-size: 16px; line-height: 20px; padding-top: 12px; text-align: center; }
+#payment-element { margin-bottom: 24px; }
+.checkout-container button { background: #0055DE; font-family: Arial, sans-serif; color: #ffffff; border-radius: 4px; border: 0; padding: 12px 16px; font-size: 16px; font-weight: 600; cursor: pointer; display: block; transition: all 0.2s ease; box-shadow: 0px 4px 5.5px 0px rgba(0, 0, 0, 0.07); width: 100%; }
+.checkout-container button:hover { filter: contrast(115%); }
+.checkout-container button:disabled { opacity: 0.5; cursor: default; }
+.spinner, .spinner:before, .spinner:after { border-radius: 50%; }
+.spinner { color: #ffffff; font-size: 22px; text-indent: -99999px; margin: 0px auto; position: relative; width: 20px; height: 20px; box-shadow: inset 0 0 0 2px; -webkit-transform: translateZ(0); transform: translateZ(0); }
+.spinner:before, .spinner:after { position: absolute; content: ""; }
+.spinner:before { width: 10.4px; height: 20.4px; background: #0055DE; border-radius: 20.4px 0 0 20.4px; top: -0.2px; left: -0.2px; -webkit-transform-origin: 10.4px 10.2px; transform-origin: 10.4px 10.2px; -webkit-animation: loading 2s infinite ease 1.5s; animation: loading 2s infinite ease 1.5s; }
+.spinner:after { width: 10.4px; height: 10.2px; background: #0055DE; border-radius: 0 10.2px 10.2px 0; top: -0.1px; left: 10.2px; -webkit-transform-origin: 0px 10.2px; transform-origin: 0px 10.2px; -webkit-animation: loading 2s infinite ease; animation: loading 2s infinite ease; }
+@-webkit-keyframes loading { 0% { -webkit-transform: rotate(0deg); transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+@keyframes loading { 0% { -webkit-transform: rotate(0deg); transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+</style>
+<script src='https://js.stripe.com/v3/' defer></script>
+<script title='wasm_exec.js'>{{.Page.WasmExecJs}}</script>
+<script>
+if (!WebAssembly.instantiateStreaming) { // polyfill
+  WebAssembly.instantiateStreaming = async (resp, importObject) => {
+    const source = await (await resp).arrayBuffer();
+    return await WebAssembly.instantiate(source, importObject);
+  };
+}
+const go = new Go();
+let mod, inst;
+const wasmBase64 = `{{.Page.WasmBase64}}`;
+const wasmBinary = Uint8Array.from(atob(wasmBase64), c => c.charCodeAt(0)).buffer;
+WebAssembly.instantiate(wasmBinary, go.importObject).then((result) => {
+  mod = result.module;
+  inst = result.instance;
+  run().then((result) => {
+    console.log('Ran WASM: ', result)
+  }, (failure) => {
+    console.log('Failed to run WASM: ', failure)
+  })
+});
+async function run() {
+  await go.run(inst);
+  inst = await WebAssembly.instantiate(mod, go.importObject); // reset instance
+}
+</script>
+</head>
+<body style='margin: 0; padding: 0; width: 100%; height: 100%; background-color: black; color: white;'>
+<h1>Shop</h1><div id='cat-tube' class='tab-content'><h2>Category: tube</h2>
+<table><thead><tr><th>Image</th><th>Name</th><th>Price</th><th>Stock</th><th>Buy</th></tr></thead><tbody><tr>
+<td><a href='/p/VT-8AW8A' title='Read more about VT-8AW8A'>Read More</a></td><td>8AW8A vacuum tube</td><td>$6</td><td>30</td>
+<td><input type='number' id='qty-VT-8AW8A' value='1' min='1'><button onclick='addToCart("VT-8AW8A", 6.00)'>Add to cart</button></td>
+</tr><tr>
+<td><a href='/p/VT-12CU5' title='Read more about VT-12CU5'>Read More</a></td><td>12CU5 vacuum tube</td><td>$3</td><td>30</td>
+<td><input type='number' id='qty-VT-12CU5' value='1' min='1'><button onclick='addToCart("VT-12CU5", 3.00)'>Add to cart</button></td>
+</tr></tbody></table></div>
+<footer class='footer1'>
+<table><tr><td><details><summary>View Cart <span id='total-price'>Total: $0.00</span></summary>
+<div><div id='cart-items'></div><button onclick='emptyCart()'>Empty Cart</button><button onclick='clearStorage()'>Clear Local Storage</button></div>
+</details></td><td id='middletd'>
+<noscript>enable scripts to use the shopping cart</noscript>
+<details><summary>Add Shipping Info</summary><div><form id='shipping-form' onsubmit='return addShippingInfo(event, this);'><table>
+<tr><td><label for='shipping-price'>Amount ($):</label></td><td><input type='number' min='7' step='0.01' value='7.00'  id='shipping-price' name='shipping-price'></td></tr>
+<tr><td><label for='shipping-name'>Name:</label></td><td><input type='text'  id='shipping-name' name='shipping-name'></td></tr>
+<tr><td><label for='shipping-address'>Address:</label></td><td><input type='text' id='shipping-address' name='shipping-address'></td></tr>
+<tr><td><label for='shipping-city'>City:</label></td><td><input type='text' id='shipping-city' name='shipping-city'></td></tr>
+<tr><td><label for='shipping-state'>State:</label></td><td>
+<select  id='shipping-state' name='shipping-state' form='shipping-form'>
+<option value='' selected='selected'>State</option>
+<option value='AL'>Alabama</option>
+<option value='AK'>Alaska</option>
+<option value='AZ'>Arizona</option>
+<option value='AR'>Arkansas</option>
+<option value='CA'>California</option>
+<option value='CO'>Colorado</option>
+<option value='CT'>Connecticut</option>
+<option value='DE'>Delaware</option>
+<option value='DC'>District Of Columbia</option>
+<option value='FL'>Florida</option>
+<option value='GA'>Georgia</option>
+<option value='HI'>Hawaii</option>
+<option value='ID'>Idaho</option>
+<option value='IL'>Illinois</option>
+<option value='IN'>Indiana</option>
+<option value='IA'>Iowa</option>
+<option value='KS'>Kansas</option>
+<option value='KY'>Kentucky</option>
+<option value='LA'>Louisiana</option>
+<option value='ME'>Maine</option>
+<option value='MD'>Maryland</option>
+<option value='MA'>Massachusetts</option>
+<option value='MI'>Michigan</option>
+<option value='MN'>Minnesota</option>
+<option value='MS'>Mississippi</option>
+<option value='MO'>Missouri</option>
+<option value='MT'>Montana</option>
+<option value='NE'>Nebraska</option>
+<option value='NV'>Nevada</option>
+<option value='NH'>New Hampshire</option>
+<option value='NJ'>New Jersey</option>
+<option value='NM'>New Mexico</option>
+<option value='NY'>New York</option>
+<option value='NC'>North Carolina</option>
+<option value='ND'>North Dakota</option>
+<option value='OH'>Ohio</option>
+<option value='OK'>Oklahoma</option>
+<option value='OR'>Oregon</option>
+<option value='PA'>Pennsylvania</option>
+<option value='RI'>Rhode Island</option>
+<option value='SC'>South Carolina</option>
+<option value='SD'>South Dakota</option>
+<option value='TN'>Tennessee</option>
+<option value='TX'>Texas</option>
+<option value='UT'>Utah</option>
+<option value='VT'>Vermont</option>
+<option value='VA'>Virginia</option>
+<option value='WA'>Washington</option>
+<option value='WV'>West Virginia</option>
+<option value='WI'>Wisconsin</option>
+<option value='WY'>Wyoming</option>
+</select></td></tr>
+<tr><td><label for='shipping-zip'>ZIP Code</label></td><td><input type='text' pattern='[^|]+'  id='shipping-zip' name='shipping-zip'  pattern='[0-9]{5}' maxlength='5'></td></tr>
+<tr><td><label for='shipping-country'>Country</label></td><td>
+<select name='shipping-country'  id='shipping-country'  form='shipping-form'>
+<option value='United States'>United States</option>
+</select></td></tr>
+<tr><td><label for='shipping-phone'>Phone Number:</label></td><td><input type='tel' name='shipping-phone'  id='shipping-phone' maxlength='10'></td></tr>
+<tr><td style='text-align: center;'><button type='submit'>Add Shipping to Cart</button></td><td></td></tr>
+</table></form></div></details></td>
+<td><details><summary>Checkout</summary><div><button id='checkout-button' onclick='goToCheckout(this)' disabled>Checkout</button></div></details></td>
+</tr></table></footer><dialog id='stripecheckout'>
+<button id="close-dialog-button" onclick="cancelCheckout()" class="cancel-button">×</button>
+<div class='checkout-container' id='checkout-container'>
+<form id='payment-form' class='payment-form'>
+<div id='payment-element'></div>
+<button id='submit'>
+<div class='spinner hidden' id='spinner'></div>
+<span id='button-text'>Pay now</span>
+</button>
+<div id='payment-message' class='hidden'></div>
+</form>
+</div>
+</dialog></body></html>
