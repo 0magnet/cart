@@ -1,3 +1,5 @@
+//go:build !wasm
+
 package main
 
 import (
@@ -5,6 +7,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"os/exec"
 	"reflect"
 
 	"fmt"
@@ -58,9 +61,27 @@ var htmlFiles = []FileAsset{
 	{Name: "public/checkout.css", Data: checkoutCSS, Built: time.Now()},
 }
 
+// goroot locates the Go installation whose wasm_exec.js should be served.
+//
+// runtime.GOROOT reports the path the binary was built with, which is the
+// wrong answer as soon as it runs anywhere else — and this is exactly that
+// case: the file wanted is a real file on the machine serving, not something
+// fixed at build time. `go env GOROOT` asks the toolchain that is actually
+// installed. If there is no go on the path, the build-time value is still a
+// better guess than nothing.
+func goroot() string {
+	out, err := exec.Command("go", "env", "GOROOT").Output()
+	if err == nil {
+		if p := strings.TrimSpace(string(out)); p != "" {
+			return p
+		}
+	}
+	return runtime.GOROOT() //nolint:staticcheck // the fallback when no go is installed
+}
+
 var jsFiles = []FileAsset{
-	{Name: runtime.GOROOT() + "/misc/wasm/wasm_exec.js"},
-	{Name: strings.TrimSuffix(runtime.GOROOT(), "go") + "tinygo" + "/targets/wasm_exec.js"},
+	{Name: filepath.Join(goroot(), "misc", "wasm", "wasm_exec.js")},
+	{Name: strings.TrimSuffix(goroot(), "go") + "tinygo" + "/targets/wasm_exec.js"},
 }
 
 var wasmFiles = []FileAsset{
@@ -158,6 +179,7 @@ func ccc(val interface{}, strct interface{}, upper bool) string {
 func init() {
 	stripe.EnableTelemetry = false
 	runCmd.Flags().SortFlags = false
+	runCmd.SetUsageTemplate(help)
 	addBoolFlag(runCmd, &f, &f.Teststripekey, "use stripe test api keys instead of live key")
 	addStringFlag(runCmd, &f, &f.StripeliveSK, "stripe live api sk")
 	addStringFlag(runCmd, &f, &f.StripelivePK, "stripe live api pk")
@@ -192,7 +214,6 @@ func Execute() {
 	}
 }
 
-var wasmData []byte
 var tmpl *htmpl.Template
 var err error
 var ldFlags string
@@ -223,15 +244,15 @@ var runCmd = &cobra.Command{
 			if err != nil {
 				msg := fmt.Sprintf("Error parsing html template indexHTML:\n%s\n%v\n", readFile(htmlFiles, 0), err)
 				log.Println(msg)
-				c.Writer.Write(htmlErr(msg))
+				_, _ = c.Writer.Write(htmlErr(msg)) //nolint:errcheck // the response is the error report; a failed write has nowhere to go
 				c.Writer.Flush()
 				return
 			}
 
-			h.WasmExecJs = htmpl.JS(readFile(jsFiles, 0))
+			h.WasmExecJs = htmpl.JS(readFile(jsFiles, 0)) //nolint:gosec // wasm_exec.js, read from the Go installation at startup — not request data
 			wasmFile := 0
 			if wasmFiles[wasmFile].Tiny {
-				h.WasmExecJs = htmpl.JS(readFile(jsFiles, 1))
+				h.WasmExecJs = htmpl.JS(readFile(jsFiles, 1)) //nolint:gosec // as above, the tinygo variant
 			}
 
 			h.WasmBase64 = base64.StdEncoding.EncodeToString(readFile(wasmFiles, wasmFile))
@@ -243,11 +264,11 @@ var runCmd = &cobra.Command{
 			if err != nil {
 				msg := fmt.Sprintf("Could not execute html template %v\n", err)
 				log.Println(msg)
-				c.Writer.Write(htmlErr(msg))
+				_, _ = c.Writer.Write(htmlErr(msg)) //nolint:errcheck // the response is the error report; a failed write has nowhere to go
 				c.Writer.Flush()
 				return
 			}
-			c.Writer.Write(result.Bytes())
+			_, _ = c.Writer.Write(result.Bytes()) //nolint:errcheck // as above: the client has gone
 			c.Writer.Flush()
 		})
 
@@ -263,18 +284,18 @@ var runCmd = &cobra.Command{
 			if err != nil {
 				msg := fmt.Sprintf("Error parsing html template indexHTML:\n%s\n%v\n", readFile(htmlFiles, 1), err)
 				log.Println(msg)
-				c.Writer.Write(htmlErr(msg))
+				_, _ = c.Writer.Write(htmlErr(msg)) //nolint:errcheck // the response is the error report; a failed write has nowhere to go
 				c.Writer.Flush()
 				return
 			}
 
-			h.Css = htmpl.CSS(readFile(htmlFiles, 2))
+			h.Css = htmpl.CSS(readFile(htmlFiles, 2)) //nolint:gosec // checkout.css, compiled into this binary by go:embed
 			h.CssName = "checkout.css"
 
-			h.WasmExecJs = htmpl.JS(readFile(jsFiles, 0))
+			h.WasmExecJs = htmpl.JS(readFile(jsFiles, 0)) //nolint:gosec // wasm_exec.js, read from the Go installation at startup — not request data
 			wasmFile := 0
 			if wasmFiles[wasmFile].Tiny {
-				h.WasmExecJs = htmpl.JS(readFile(jsFiles, 1))
+				h.WasmExecJs = htmpl.JS(readFile(jsFiles, 1)) //nolint:gosec // as above, the tinygo variant
 			}
 
 			h.WasmBase64 = base64.StdEncoding.EncodeToString(readFile(wasmFiles, wasmFile))
@@ -286,11 +307,11 @@ var runCmd = &cobra.Command{
 			if err != nil {
 				msg := fmt.Sprintf("Could not execute html template %v\n", err)
 				log.Println(msg)
-				c.Writer.Write(htmlErr(msg))
+				_, _ = c.Writer.Write(htmlErr(msg)) //nolint:errcheck // the response is the error report; a failed write has nowhere to go
 				c.Writer.Flush()
 				return
 			}
-			c.Writer.Write(result.Bytes())
+			_, _ = c.Writer.Write(result.Bytes()) //nolint:errcheck // as above: the client has gone
 			c.Writer.Flush()
 		})
 
@@ -307,7 +328,7 @@ var runCmd = &cobra.Command{
 			}
 			c.Writer.WriteHeader(http.StatusOK)
 			c.Writer.Flush()
-			c.Writer.Write(order)
+			_, _ = c.Writer.Write(order) //nolint:errcheck // the order JSON is the response; a failed write means the client is gone
 			c.Writer.Flush()
 		})
 
@@ -383,7 +404,7 @@ var runCmd = &cobra.Command{
 			}
 
 			ordersDir := "./orders"
-			if err := os.MkdirAll(ordersDir, os.ModePerm); err != nil {
+			if err := os.MkdirAll(ordersDir, 0o750); err != nil {
 				log.Printf("Error creating orders directory: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to save order"})
 				return
@@ -393,12 +414,12 @@ var runCmd = &cobra.Command{
 
 			data, err := json.MarshalIndent(requestData.LocalStorageData, "", "  ")
 			if err != nil {
-				log.Printf("Error marshalling data: %v", err)
+				log.Printf("Error marshaling data: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to save order"})
 				return
 			}
 
-			if err := os.WriteFile(filePath, data, 0644); err != nil {
+			if err := os.WriteFile(filePath, data, 0o600); err != nil {
 				log.Printf("Error writing data to file: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to save order"})
 				return
@@ -410,7 +431,9 @@ var runCmd = &cobra.Command{
 		wg.Add(1)
 		go func() {
 			fmt.Printf("listening on http://127.0.0.1:%d using gin router\n", f.WebPort)
-			r1.Run(fmt.Sprintf(":%d", f.WebPort))
+			if err := r1.Run(fmt.Sprintf(":%d", f.WebPort)); err != nil {
+				log.Printf("gin router stopped: %v", err)
+			}
 			wg.Done()
 		}()
 		initJSFiles()
@@ -426,7 +449,7 @@ var runCmd = &cobra.Command{
 }
 
 func initJSFiles() {
-	for i, _ := range jsFiles {
+	for i := range jsFiles {
 		jsFiles[i].Data, err = script.File(jsFiles[i].Name).Bytes()
 		if err != nil {
 			log.Fatal("Could not read file: ", jsFiles[i].Name, jsFiles[i].Data, err)
@@ -435,7 +458,7 @@ func initJSFiles() {
 }
 
 func initHTMLFiles() {
-	for i, _ := range htmlFiles {
+	for i := range htmlFiles {
 		fileInfo, err := os.Stat(htmlFiles[i].Name)
 		if err != nil {
 			log.Printf("Error accessing file %s: %v", htmlFiles[i].Name, err)
@@ -459,7 +482,7 @@ func initHTMLFiles() {
 }
 
 func initFiles() {
-	for i, _ := range wasmFiles {
+	for i := range wasmFiles {
 		fileInfo, err := os.Stat(wasmFiles[i].Name)
 		if err != nil {
 			log.Printf("Error accessing file %s: %v", wasmFiles[i].Name, err)
@@ -562,15 +585,6 @@ func getMethodColor(method string) string {
 }
 func resetColor() string { return reset }
 
-type consoleColorModeValue int
-
-var consoleColorMode = autoColor
-
-const (
-	autoColor consoleColorModeValue = iota
-	disableColor
-	forceColor
-)
 const (
 	green   = "\033[97;42m"
 	white   = "\033[90;47m"
@@ -611,14 +625,6 @@ func scriptExecBool(s string) bool {
 		}
 	}
 	return false
-}
-
-func scriptExecArray(s string) string {
-	y, err := script.Exec(fmt.Sprintf(`bash -c 'MENV=%s ; if [[ $MENV != "" ]] && [[ -f $MENV ]] ; then source $MENV ; fi ; for _i in %s ; do echo "$_i" ; done'`, menvfile, s)).Slice()
-	if err == nil {
-		return strings.Join(y, ",")
-	}
-	return ""
 }
 
 func scriptExecInt(s string) int {

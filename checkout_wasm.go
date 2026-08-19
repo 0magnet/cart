@@ -19,14 +19,12 @@ type item struct {
 }
 
 var (
-	doc        = js.Global().Get("document")
-	body       = doc.Call("querySelector", "body")
-	bodystring = body.Get("innerHTML").String()
-	cart       []item
+	doc  = js.Global().Get("document")
+	cart []item
 )
 
 func main() {
-	c := make(chan struct{}, 0)
+	c := make(chan struct{})
 	if stripePK == "" {
 		log.Fatal("Stripe PK not found!")
 	}
@@ -70,9 +68,16 @@ func saveCart() {
 	updateCartDisplay()
 }
 
-func addToCart(this js.Value, args []js.Value) any {
-	if len(args) < 2 {
-		return "Error: Missing arguments"
+// addToCart is called from Go rather than registered with js.FuncOf, so it
+// keeps the callback shape its callers build but returns nothing.
+//
+// The guard reads three arguments, not two: qty is args[2]. Checking for two
+// and then indexing the third is an out-of-range panic for any caller that
+// passes exactly two, which is what the check was there to prevent.
+func addToCart(_ js.Value, args []js.Value) {
+	if len(args) < 3 {
+		log.Println("addToCart: missing arguments")
+		return
 	}
 	var cartItem item
 	index := -1
@@ -82,7 +87,7 @@ func addToCart(this js.Value, args []js.Value) any {
 		qty = 1
 	}
 	amount := int(args[1].Float()) * qty
-	for i, _ := range cart {
+	for i := range cart {
 		if strings.Split(cart[i].ID, "|")[0] == strings.Split(id, "|")[0] {
 			index = i
 		}
@@ -106,7 +111,7 @@ func addToCart(this js.Value, args []js.Value) any {
 		cart = append(cart, cartItem)
 	}
 	saveCart()
-	return nil
+
 }
 
 func addUnToCart(this js.Value, args []js.Value) interface{} {
@@ -234,7 +239,7 @@ func updateItemQuantity(this js.Value, args []js.Value) interface{} {
 	if err != nil {
 		log.Println(err)
 	}
-	for i, _ := range cart {
+	for i := range cart {
 		if cart[i].ID == id {
 			unitPrice := cart[i].Amount / cart[i].Qty
 			cart[i].Qty = qty
@@ -281,8 +286,6 @@ var (
 	elements       js.Value
 	stripeValue    js.Value
 	stripe         js.Value
-	checkoutButton = doc.Call("getElementById", "checkout-button")
-	checkoutDiv    = doc.Call("getElementById", "checkout-container")
 	checkoutStripe = doc.Call("getElementById", "stripecheckout")
 )
 
@@ -315,7 +318,7 @@ func goToCheckout(this js.Value, args []js.Value) any {
 }
 
 func cancelCheckout(this js.Value, args []js.Value) any {
-	log.Println("Cancelling checkout ; closing dialog")
+	log.Println("Canceling checkout ; closing dialog")
 	checkoutStripe.Call("close")
 	updateCartDisplay()
 	return nil
@@ -562,7 +565,7 @@ func submitOrder(localStorageData map[string]interface{}, paymentIntentId string
 
 	body, err := json.Marshal(orderData)
 	if err != nil {
-		log.Println("Error marshalling order data:", err)
+		log.Println("Error marshaling order data:", err)
 		return
 	}
 
@@ -600,10 +603,12 @@ func submitOrder(localStorageData map[string]interface{}, paymentIntentId string
 }
 
 func setPaymentDetails(intent js.Value) {
-	var statusText, iconColor, icon string
-	statusText = "Something went wrong, please try again."
-	iconColor = "#DF1B41"
-	icon = errorIcon
+	// Every path through the switch below sets this, including its default,
+	// so there is nothing to fall back to. iconColor and icon do fall back:
+	// the cases that only change the wording leave them red.
+	var statusText string
+	iconColor := "#DF1B41"
+	icon := errorIcon
 
 	if !intent.IsUndefined() {
 		intentStatus := intent.Get("status").String()

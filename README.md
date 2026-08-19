@@ -67,3 +67,39 @@ bash -c 'GOOS=js GOARCH=wasm tinygo build -target=wasm --no-debug -ldflags="-X '
 [GIN] | 2025/01/02 - 13:34:21 | 200 |    3.722628ms |       127.0.0.1 |                                                          127.0.0.1:47960 | GET      /order/pi_3Qcu9cCAQwDfFjHh04TXIz1Q
 
 ```
+## Dependency Graph
+
+Made with [goda](https://github.com/loov/goda):
+
+```
+# GOOS=js: the import edges of a wasm program live in js/wasm-tagged
+# files and are invisible to a host-context run
+GOOS=js GOARCH=wasm go run github.com/loov/goda@latest graph github.com/0magnet/cart/... | dot -Tsvg -o docs/cart-goda-graph.svg
+```
+
+![Dependency Graph](docs/cart-goda-graph.svg "github.com/0magnet/cart Dependency Graph")
+
+## Lines of Code
+
+Made with [gocloc](https://github.com/hhatto/gocloc) (excludes `vendor/`, `node_modules/`, `.git/`):
+
+```
+gocloc --not-match-d='(vendor|node_modules|\.git)' .
+```
+
+```
+-------------------------------------------------------------------------------
+Language                     files          blank        comment           code
+-------------------------------------------------------------------------------
+Go                               2            127             44           1141
+CSS                              1             21              5            231
+HTML                             2              0              0            210
+YAML                             1              0              7             98
+Makefile                         1             14             21             55
+Markdown                         1             14              0             55
+Bourne Shell                     1              8             16             30
+JSON                             2              0              0             28
+-------------------------------------------------------------------------------
+TOTAL                           11            184             93           1848
+-------------------------------------------------------------------------------
+```
